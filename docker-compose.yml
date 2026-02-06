@@ -1,0 +1,37 @@
+version: "3"
+
+services:
+  anal_web:
+    build:
+      context: .
+      args:
+        GITLAB_TOKEN: ${GITLAB_TOKEN}
+    command: ["gunicorn", "main:app", "--timeout", "120", "--workers", "1", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:9000"]
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - anal_db
+    networks:
+      - niin_bridge
+
+  anal_db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${DB_LOGIN}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    networks:
+      - niin_bridge
+
+volumes:
+  postgres_data:
+
+networks:
+  niin_bridge:
