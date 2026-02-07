@@ -2,12 +2,12 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import select
 import asyncio 
 from sqlalchemy.ext.asyncio import AsyncSession
-from openai import AsyncOpenAI
+from openai import OpenAI
 from views.database.documents import Document
 from config import get_settings
 
 settings = get_settings()
-openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+openai_client = OpenAI(api_key=settings.openai_api_key)
 
 class DocumentService:
     def __init__(self, session: AsyncSession):
@@ -37,14 +37,15 @@ class DocumentService:
 
         prompt = f"Summarize the following document in 3-5 bullet points:\n\n{doc.content}"
         try:
-            response = await openai_client.chat.completions.create(  # ← вот так теперь
-                model="gpt-3.5-turbo",
+            response = await asyncio.to_thread(
+                openai_client.chat.completions.create,
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.7,  # можно добавить, если хочешь разнообразия
-                max_tokens=300,   # лимит, чтоб не улетел в бесконечность
+                temperature=0.7,
+                max_tokens=300,
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
@@ -61,8 +62,9 @@ class DocumentService:
             f"Document: {doc.content}\n\nQuestion: {question}"
         )
         try:
-            response = await openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
+            response = await asyncio.to_thread(
+                openai_client.chat.completions.create,
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": prompt}
