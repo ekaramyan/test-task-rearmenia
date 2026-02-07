@@ -11,46 +11,72 @@ from sqlalchemy.orm import selectinload
 from passlib.hash import pbkdf2_sha256
 import os
 import aiofiles
-from config import UPLOAD_PATH
+from config import UPLOAD_PATH, get_settings
 from .roles__logic import AsyncRoleService
 from views.enums.filters import OrderBy, UserFilter
+from log import logger
 
+settings = get_settings()
 
 class AsyncUserService():
 
     def __init__(self, session: AsyncSession):
         self.session = session
 
+
     async def auto_create_admin(self):
+        """
+        Автоматически создаёт администратора, если он отсутствует в БД.
+        """
+        login =settings.admin_user_login
 
-        query = select(User).where(User.login == 'admin')
+        await logger.ainfo("Checking if admin user already exists...")
+        query = select(User).where(
+            User.login == login,
+            User.deleted_at.is_(None)
+        )
         result = await self.session.execute(query)
-        elem: User | None = result.scalars().first()
+        elem: User | None = result.scalars().one_or_none()
         if elem:
+            await logger.ainfo("Admin user already exists. No action required.")
             return
 
-        role = Role(name="Администратор")
-        try:
-            self.session.add(role)
-            await self.session.flush()
-            await self.session.refresh(role)
-            print(role.id)
-        except Exception as e:
-            print(e)
-            await self.session.rollback()
-            await self.session.close()
-            return
+        # Проверяем, есть ли уже роль "СуперАдмин"
+        await logger.ainfo("Checking if role 'СуперАдмин' exists...")
+        role_query = select(Role).where(Role.name == "СуперАдмин")
+        role_result = await self.session.execute(role_query)
+        role: Role | None = role_result.scalars().one_or_none()
+
+        if not role:
+            await logger.ainfo("Role 'СуперАдмин' not found. Creating...")
+            role = Role(name="СуперАдмин")
+            try:
+                self.session.add(role)
+                await self.session.flush()
+                await self.session.refresh(role)
+                await logger.ainfo(f"Role created successfully with ID: {role.id}")
+            except Exception as e:
+                await logger.aerror("Failed to create role 'СуперАдмин'", err=e)
+                await self.session.rollback()
+                await self.session.close()
+                return
+        else:
+            await logger.ainfo(f"Role 'СуперАдмин' already exists with ID: {role.id}")
 
         admin_data = UserCreateScheme(
             first_name='Admin',
             last_name='Admin',
-            email='admin@mail.ru',
-            login='admin',
-            password='1234',
-            role_id=role.id
+            login=settings.admin_user_login,
+            password=settings.admin_user_password,
+            role_id=role.id,
+            phone='+37499999999',
+            email="admin@example.com",
+            tg="@admin"
         )
 
+        await logger.ainfo("Creating admin user...")
         await self.create(admin_data)
+        await logger.ainfo("Admin user created successfully.")
 
     async def get(self, id: int) -> UserScheme:
 

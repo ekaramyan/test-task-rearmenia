@@ -9,7 +9,6 @@ from jwt_auth import (
     create_access_token,
     token_decode)
 from config import get_settings
-from utils.encrypt_data import decrypt
 from views.database.users import User
 from views.json.auth import AuthScheme, RefreshScheme
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,8 +52,8 @@ async def login(
         username=form_data.username,
         password=form_data.password
     )
-    logger.info(f"Username login from DB decrypted: {user.login}")
-    auth = generate_jwt_tokens(decrypt(user.login))
+    logger.info(f"Username login from DB: {user.login}")
+    auth = generate_jwt_tokens(user.login)
     return auth
 
 

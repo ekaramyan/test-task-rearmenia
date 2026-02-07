@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 from .utils import to_camel
 from .roles import RoleScheme
 
@@ -50,7 +50,6 @@ class UserCreateScheme(UserBaseScheme):
     login: str
     phone: str | None = None
     tg: str | None = None
-
 
 class UserUpdateScheme(UserBaseScheme):
 

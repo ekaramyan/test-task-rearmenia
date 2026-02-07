@@ -10,7 +10,6 @@ UPLOAD_PATH = os.path.join(BASE_DIR, "storage")
 
 class Settings(BaseSettings):
     
-    gitlab_token: str
     db_login: str = 'postgres'
     db_password: str
     db_name: str
@@ -25,6 +24,8 @@ class Settings(BaseSettings):
     current_host: str
     openai_api_key: str
     fixed_IV: bytes = Field(default=b"\x00" * 16)
+    admin_user_login: str
+    admin_user_password: str
 
     broker_host: str
 

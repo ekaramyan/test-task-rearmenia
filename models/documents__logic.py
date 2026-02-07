@@ -1,40 +1,74 @@
-import asyncio
-import base64
-import random
-from io import BytesIO
-from uuid import UUID
-from fastapi import HTTPException, status
-from PIL import Image
-import json
-import os
-import uuid
-from datetime import datetime, timedelta
-import aiofiles
-import aiohttp
-from anyio import value
-import requests
-from fastapi import Request, UploadFile
-from requests import Response
-from sqlalchemy import String, and_, distinct, select, func, Sequence, or_, text
+from typing import List, Optional, Dict, Any
+from sqlalchemy import select
+from sqlalchemy.ext import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased, joinedload, selectinload, with_loader_criteria
-
+import openai
+from views.database.documents import Document
 from config import get_settings
-from views.json.v3.applications import Base64File
 
 settings = get_settings()
-CURRENT_HOST = settings.current_host  # noqa 501
+openai.api_key = settings.openai_api_key
 
 
 class DocumentService:
-
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def create_document(self, title: str, content: str) -> Document:
+        doc = Document(title=title, content=content)
+        self.session.add(doc)
+        await self.session.commit()
+        await self.session.refresh(doc)
+        return doc
 
+    async def get_all_documents(self) -> List[Document]:
+        stmt = select(Document)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
 
-    @staticmethod
-    def decode_file(base64_file: Base64File) -> tuple[str, bytes]:
-        file_bytes = base64.b64decode(base64_file.data)
-        filename = base64_file.filename
-        return filename, file_bytes
+    async def get_document_by_id(self, doc_id: int) -> Optional[Document]:
+        stmt = select(Document).where(Document.id == doc_id)
+        result = await self.session.execute(stmt)
+        return result.scalars().first()
+
+    async def summarize_document(self, doc_id: int) -> str:
+        doc = await self.get_document_by_id(doc_id)
+        if not doc:
+            raise ValueError("Document not found")
+
+        prompt = f"Summarize the following document in 3-5 bullet points:\n\n{doc.content}"
+        try:
+            response = await asyncio.to_thread(  # openai sync → в thread, чтоб не блочить
+                openai.ChatCompletion.create,
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            raise RuntimeError(f"LLM error: {str(e)}")
+
+    async def ask_question(self, doc_id: int, question: str) -> str:
+        doc = await self.get_document_by_id(doc_id)
+        if not doc:
+            raise ValueError("Document not found")
+
+        prompt = (
+            f"Answer the question based only on the following document content. "
+            f"If the answer is not in the document, say 'Not found in the document':\n\n"
+            f"Document: {doc.content}\n\nQuestion: {question}"
+        )
+        try:
+            response = await asyncio.to_thread(
+                openai.ChatCompletion.create,
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            raise RuntimeError(f"LLM error: {str(e)}")

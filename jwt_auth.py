@@ -6,7 +6,6 @@ from fastapi.security import OAuth2PasswordBearer
 from log import logger
 import re
 
-from utils.encrypt_data import encrypt
 from views.database.users import User
 from datetime import datetime, timedelta
 from typing import Union
@@ -27,30 +26,17 @@ def get_password_hash(password):
     return pbkdf2_sha256.hash(password)
 
 
-def format_phone_number(phone_str: str) -> str:
-    normalized_str = re.sub(r'[^\d+]', '', phone_str)
-    match = re.fullmatch(r'\+374(\d{2})(\d{2})(\d{2})(\d{2})', normalized_str)
-    if match:
-        area_code, prefix, line1, line2 = match.groups()
-        formatted_str = f"+374 ({area_code}) {prefix}-{line1}-{line2}"
-        logger.info(f'formatted_str: {formatted_str}')
-        return formatted_str
-    else:
-        logger.info(f"Ошибка: Невозможно отформатировать номер '{phone_str}'. Ожидался формат '+7' + 10 цифр.")
-        return phone_str
 
 
 async def async_get_user(db: AsyncSession, login: str):
-    encrypted_login = encrypt(login)
-    logger.info(f"Username encrypted from request: {encrypted_login}")
+    logger.info(f"Username from request: {login}")
     query = (
         select(User)
         .filter(
             User.deleted_at.is_(None),
             or_(
-                User.login == encrypted_login,
-                User.phone == encrypted_login,
-                User.phone == encrypt(format_phone_number(login))
+                User.login == login,
+                User.phone == login,
             )
         )
         .options(selectinload(User.role))

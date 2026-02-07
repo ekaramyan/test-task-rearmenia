@@ -72,6 +72,9 @@ REFRESH_TOKEN_EXPIRE_MINUTES=100800
 broker_host=localhost:9000
 CURRENT_HOST=http://localhost:8000
 OPENAI_API_KEY=
+
+ADMIN_USER_LOGIN=admin_user
+ADMIN_USER_PASSWORD=admin_password
 ```
 10. Запустим миграцию alembic:
 ```cmd
